@@ -11,6 +11,7 @@ from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
 from tgbot.config import load_config, Config
 from tgbot.handlers import routers_list
 from tgbot.middlewares.config import ConfigMiddleware
+from tgbot.middlewares.throttling import ThrottlingMiddleware
 from tgbot.services import broadcaster
 
 
@@ -34,6 +35,8 @@ def register_global_middlewares(dp: Dispatcher, config: Config, session_pool=Non
         # DatabaseMiddleware(session_pool),
     ]
 
+    # uncomment this if you want to throttle the handlers
+    # dp.message.middleware(ThrottlingMiddleware())
     for middleware_type in middleware_types:
         dp.message.outer_middleware(middleware_type)
         dp.callback_query.outer_middleware(middleware_type)
