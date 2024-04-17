@@ -3,6 +3,8 @@ import logging
 
 import betterlogging as bl
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
 
@@ -89,7 +91,8 @@ async def main():
     config = load_config(".env")
     storage = get_storage(config)
 
-    bot = Bot(token=config.tg_bot.token, parse_mode="HTML")
+    default = DefaultBotProperties(parse_mode=ParseMode.HTML)
+    bot = Bot(token=config.tg_bot.token, default=default)
     dp = Dispatcher(storage=storage)
 
     dp.include_routers(*routers_list)
