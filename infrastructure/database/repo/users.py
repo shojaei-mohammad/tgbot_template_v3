@@ -25,19 +25,6 @@ class UserRepo(BaseRepo):
         :param username: The user's username. It's an optional parameter.
         :return: User object, None if there was an error while making a transaction.
         """
-        values_dict = {
-            "user_id": user_id,
-            "username": username,
-            "full_name": full_name,
-            "language": language,
-
-        }
-
-        # Remove None values to avoid nullifying columns in the database
-        values_dict = {
-            key: value for key, value in values_dict.items() if value is not None
-        }
-
         try:
 
             insert_stmt = (
@@ -50,9 +37,10 @@ class UserRepo(BaseRepo):
                 )
                 .on_conflict_do_update(
                     index_elements=[User.user_id],
-                    set_={
-                        key: values_dict[key] for key in values_dict if key != "user_id"
-                    },
+                    set_=dict(
+                        username=username,
+                        full_name=full_name,
+                    ),
                 )
                 .returning(User)
             )
