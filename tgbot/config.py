@@ -67,7 +67,7 @@ class DbConfig(BaseSettings, env_prefix="DB_"):
             port=port,
             database=self.database,
         )
-        return uri.render_as_string(hide_password=True)
+        return uri.render_as_string(hide_password=False)
 
 
 class RedisConfig(BaseSettings, env_prefix="REDIS_"):
