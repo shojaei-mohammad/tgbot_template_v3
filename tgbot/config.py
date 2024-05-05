@@ -1,11 +1,28 @@
-from dataclasses import dataclass
+import logging
 from typing import Optional
 
-from environs import Env
+from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic_settings import BaseSettings as _BaseSettings
+from pydantic_settings import SettingsConfigDict
 
 
-@dataclass
-class DbConfig:
+class BaseSettings(_BaseSettings):
+    model_config = SettingsConfigDict(
+        extra="ignore", env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+    )
+
+
+class TgBot(BaseSettings, env_prefix="TGBOT_"):
+    """
+    Creates the TgBot object from environment variables.
+    """
+
+    token: SecretStr
+    admin_ids: list[int]
+    use_redis: bool = False
+
+
+class DbConfig(BaseSettings, env_prefix="DB_"):
     """
     Database configuration class.
     This class holds the settings for the database, such as host, password, port, etc.
@@ -25,7 +42,7 @@ class DbConfig:
     """
 
     host: str
-    password: str
+    password: SecretStr
     user: str
     database: str
     port: int = 5432
@@ -45,93 +62,45 @@ class DbConfig:
         uri = URL.create(
             drivername=f"postgresql+{driver}",
             username=self.user,
-            password=self.password,
+            password=self.password.get_secret_value(),
             host=host,
             port=port,
             database=self.database,
         )
-        return uri.render_as_string(hide_password=False)
-
-    @staticmethod
-    def from_env(env: Env):
-        """
-        Creates the DbConfig object from environment variables.
-        """
-        host = env.str("DB_HOST")
-        password = env.str("POSTGRES_PASSWORD")
-        user = env.str("POSTGRES_USER")
-        database = env.str("POSTGRES_DB")
-        port = env.int("DB_PORT", 5432)
-        return DbConfig(
-            host=host, password=password, user=user, database=database, port=port
-        )
+        return uri.render_as_string(hide_password=True)
 
 
-@dataclass
-class TgBot:
-    """
-    Creates the TgBot object from environment variables.
-    """
-
-    token: str
-    admin_ids: list[int]
-    use_redis: bool
-
-    @staticmethod
-    def from_env(env: Env):
-        """
-        Creates the TgBot object from environment variables.
-        """
-        token = env.str("BOT_TOKEN")
-        admin_ids = env.list("ADMINS", subcast=int)
-        use_redis = env.bool("USE_REDIS")
-        return TgBot(token=token, admin_ids=admin_ids, use_redis=use_redis)
-
-
-@dataclass
-class RedisConfig:
+class RedisConfig(BaseSettings, env_prefix="REDIS_"):
     """
     Redis configuration class.
 
     Attributes
     ----------
-    redis_pass : Optional(str)
+    password : Optional(SecretStr)
         The password used to authenticate with Redis.
-    redis_port : Optional(int)
+    port : Optional(int)
         The port where Redis server is listening.
-    redis_host : Optional(str)
+    host : Optional(str)
         The host where Redis server is located.
     """
 
-    redis_pass: Optional[str]
-    redis_port: Optional[int]
-    redis_host: Optional[str]
+    password: Optional[SecretStr]
+    port: Optional[int] = 6379
+    host: Optional[str] = "localhsot"
 
     def dsn(self) -> str:
         """
         Constructs and returns a Redis DSN (Data Source Name) for this database configuration.
         """
-        if self.redis_pass:
-            return f"redis://:{self.redis_pass}@{self.redis_host}:{self.redis_port}/0"
+        if self.password:
+            return (
+                f"redis://:{self.password.get_secret_value()}@{self.host}:{self.port}/0"
+            )
         else:
-            return f"redis://{self.redis_host}:{self.redis_port}/0"
-
-    @staticmethod
-    def from_env(env: Env):
-        """
-        Creates the RedisConfig object from environment variables.
-        """
-        redis_pass = env.str("REDIS_PASSWORD")
-        redis_port = env.int("REDIS_PORT")
-        redis_host = env.str("REDIS_HOST")
-
-        return RedisConfig(
-            redis_pass=redis_pass, redis_port=redis_port, redis_host=redis_host
-        )
+            return f"redis://{self.host}:{self.port}/0"
 
 
-@dataclass
-class Miscellaneous:
+class Miscellaneous(BaseSettings, env_prefix="MISC_"):
     """
     Miscellaneous configuration class.
 
@@ -147,8 +116,7 @@ class Miscellaneous:
     other_params: str = None
 
 
-@dataclass
-class Config:
+class Config(BaseModel):
     """
     The main configuration class that integrates all the other configuration classes.
 
@@ -167,27 +135,20 @@ class Config:
     """
 
     tg_bot: TgBot
-    misc: Miscellaneous
-    db: Optional[DbConfig] = None
-    redis: Optional[RedisConfig] = None
+    db: DbConfig
+    redis: RedisConfig
+    misc: Optional[Miscellaneous] = None
 
 
-def load_config(path: str = None) -> Config:
-    """
-    This function takes an optional file path as input and returns a Config object.
-    :param path: The path of env file from where to load the configuration variables.
-    It reads environment variables from a .env file if provided, else from the process environment.
-    :return: Config object with attributes set as per environment variables.
-    """
+def load_config() -> Config:
+    try:
 
-    # Create an Env object.
-    # The Env object will be used to read environment variables.
-    env = Env()
-    env.read_env(path)
-
-    return Config(
-        tg_bot=TgBot.from_env(env),
-        # db=DbConfig.from_env(env),
-        # redis=RedisConfig.from_env(env),
-        misc=Miscellaneous(),
-    )
+        return Config(
+            tg_bot=TgBot(),
+            db=DbConfig(),
+            redis=RedisConfig(),
+        )
+    except ValidationError as e:
+        # Handle missing or invalid configurations
+        logging.error("Failed to load configuration: %s", e)
+        raise

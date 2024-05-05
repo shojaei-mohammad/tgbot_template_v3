@@ -85,11 +85,11 @@ def get_storage(config):
 async def main():
     setup_logging()
 
-    config = load_config(".env")
+    config = load_config()
     storage = get_storage(config)
 
     default = DefaultBotProperties(parse_mode=ParseMode.HTML)
-    bot = Bot(token=config.tg_bot.token, default=default)
+    bot = Bot(token=config.tg_bot.token.get_secret_value(), default=default)
     dp = Dispatcher(storage=storage)
 
     dp.include_routers(*routers_list)
