@@ -1,7 +1,6 @@
-import logging
 from typing import Optional
 
-from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic import BaseModel, SecretStr
 from pydantic_settings import BaseSettings as _BaseSettings
 from pydantic_settings import SettingsConfigDict
 
@@ -10,6 +9,17 @@ class BaseSettings(_BaseSettings):
     model_config = SettingsConfigDict(
         extra="ignore", env_file=".env", env_file_encoding="utf-8", case_sensitive=False
     )
+
+    @classmethod
+    def set_env_file(cls, env_file_path: str):
+        """
+        Dynamically sets the path to the .env file for the model configuration.
+        This method should ideally be used before any instances are created to avoid inconsistent configurations across instances.
+
+        Args:
+            env_file_path: The path to the .env file.
+        """
+        cls.model_config["env_file"] = env_file_path
 
 
 class TgBot(BaseSettings, env_prefix="TGBOT_"):
@@ -113,7 +123,7 @@ class Miscellaneous(BaseSettings, env_prefix="MISC_"):
         A string used to hold other various parameters as required (default is None).
     """
 
-    other_params: str = None
+    other_params: str
 
 
 class Config(BaseModel):
@@ -137,18 +147,35 @@ class Config(BaseModel):
     tg_bot: TgBot
     db: DbConfig
     redis: RedisConfig
-    misc: Optional[Miscellaneous] = None
+    misc: Optional[Miscellaneous]
 
 
-def load_config() -> Config:
-    try:
+def load_config(env_file: Optional[str] = None):
+    """
+    Load configuration from a specified or default .env file.
 
-        return Config(
-            tg_bot=TgBot(),
-            db=DbConfig(),
-            redis=RedisConfig(),
-        )
-    except ValidationError as e:
-        # Handle missing or invalid configurations
-        logging.error("Failed to load configuration: %s", e)
-        raise
+    This function initializes configuration objects for the application
+    based on the settings defined in a .env file. If no specific file is
+    provided via `env_file`, it defaults to 'env'.
+
+    Parameters:
+        env_file (str, optional): Path to the .env file to use. Defaults to 'env'.
+
+    Returns:
+        Config: Config object containing settings loaded from the .env file.
+
+    Raises:
+        ValidationError: If any environment variables fail validation checks.
+    """
+    # Set the default .env file if none specified
+    if env_file is None:
+        env_file = ".env"
+
+    # Create instances with the specified or default .env file
+    config = Config(
+        tg_bot=TgBot(_env_file=env_file),
+        db=DbConfig(_env_file=env_file),
+        redis=RedisConfig(_env_file=env_file),
+        misc=Miscellaneous(_env_file=env_file),
+    )
+    return config
