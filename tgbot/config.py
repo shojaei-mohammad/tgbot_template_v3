@@ -1,3 +1,5 @@
+import logging
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, SecretStr
@@ -96,7 +98,7 @@ class RedisConfig(BaseSettings, env_prefix="REDIS_"):
 
     password: Optional[SecretStr]
     port: Optional[int] = 6379
-    host: Optional[str] = "localhsot"
+    host: Optional[str] = "localhost"
 
     def dsn(self) -> str:
         """
@@ -168,14 +170,35 @@ def load_config(env_file: Optional[str] = None):
         ValidationError: If any environment variables fail validation checks.
     """
     # Set the default .env file if none specified
-    if env_file is None:
-        env_file = ".env"
+    if env_file:
+        BaseSettings.set_env_file(
+            env_file
+        )  # Set the environment file for all settings classes
+    else:
+        env_file = ".env"  # Default .env path
 
-    # Create instances with the specified or default .env file
-    config = Config(
-        tg_bot=TgBot(_env_file=env_file),
-        db=DbConfig(_env_file=env_file),
-        redis=RedisConfig(_env_file=env_file),
-        misc=Miscellaneous(_env_file=env_file),
-    )
-    return config
+    # Convert to absolute path
+    env_file_path = Path(env_file).resolve()
+
+    # Check if the .env file exists
+    if not env_file_path.exists():
+        raise FileNotFoundError(
+            f"The specified .env file does not exist: {env_file_path}"
+        )
+
+    logging.info(f"Loading configuration from {env_file_path}")
+
+    try:
+
+        # Create instances with the specified or default .env file
+        config = Config(
+            tg_bot=TgBot(_env_file=env_file),
+            db=DbConfig(_env_file=env_file),
+            redis=RedisConfig(_env_file=env_file),
+            misc=Miscellaneous(_env_file=env_file),
+        )
+        logging.info(f"Configuration loaded from {env_file_path}")
+        return config
+    except Exception as e:
+        logging.error(f"Error loading configuration from {env_file_path}: {e}")
+        raise e
